@@ -47,12 +47,12 @@ class CameraApp(App):
                 if barcode_data in valid_barcodes_list:
                     if barcode_data not in found_barcodes_list:
                         found_barcodes_list.append(barcode_data)
-                        self.play_sound("linuxmint-login.wav.wav")
+                        self.play_sound("linuxmint-login.wav")
                         self.label.text = f"Barcode {barcode_data} added to found list!"
                     else:
                         self.label.text = f"Barcode {barcode_data} already found."
                 else:
-                    self.play_sound("linuxmint-gdm.wav.wav")
+                    self.play_sound("linuxmint-gdm.wav")
                     self.label.text = f"Barcode {barcode_data} not found in valid list."
 
             # Convert frame to Kivy texture
