@@ -10,7 +10,7 @@ from pyzbar.pyzbar import decode
 import pygame  # For sound playback
 
 # Define two lists for checking barcodes
-valid_barcodes_list = ['123456789012', '987654321098', '6175111500-35', '4005123600-13' ,'2834113300-19']  # Example barcodes
+valid_barcodes_list = ['6175111500-35', '4005123600-13' ,'2834113300-19']  # Example barcodes
 moved_barcodes_list = []  # List to hold moved barcodes
 
 class CameraApp(App):
