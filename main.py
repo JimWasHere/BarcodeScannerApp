@@ -1,105 +1,78 @@
 import cv2
-import numpy as np
 from kivy.app import App
-from kivy.uix.label import Label
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.uix.button import Button
 from kivy.uix.image import Image
 from kivy.clock import Clock
 from kivy.graphics.texture import Texture
+import pygame
 from pyzbar.pyzbar import decode
-import pygame  # For sound playback
+import json
 
-# Define two lists for checking barcodes
-valid_barcodes_list = ['6175111500-35', '4005123600-13' ,'2834113300-19']  # Example barcodes
-moved_barcodes_list = []  # List to hold moved barcodes
+# Initialize valid and found barcode lists
+valid_barcodes_list = ['123456789012', '987654321098']
+found_barcodes_list = []
 
 class CameraApp(App):
     def build(self):
-        # Set up the layout
         self.layout = BoxLayout(orientation='vertical')
 
-        # Camera feed display
-        self.img = Image()
-        self.layout.add_widget(self.img)
+        self.image = Image()
+        self.layout.add_widget(self.image)
 
-        # Label to show barcodes found
-        self.barcode_label = Label(text="Barcodes Found:\n", size_hint=(1, 0.2))
-        self.layout.add_widget(self.barcode_label)
+        self.label = Label(text="Point the camera at a barcode.")
+        self.layout.add_widget(self.label)
 
-        # Initialize the camera
-        self.cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-        if not self.cap.isOpened():
-            self.barcode_label.text = "Error: Could not open video device."
-            print("Error: Could not open video device.")
-        else:
-            print("Camera opened successfully.")
-            Clock.schedule_interval(self.update, 1.0 / 30.0)  # Update the frame every 30th of a second
+        # Buttons for clearing lists
+        self.clear_found_btn = Button(text="Clear Found Barcodes")
+        self.clear_found_btn.bind(on_press=self.clear_found_barcodes)
+        self.layout.add_widget(self.clear_found_btn)
+
+        # Camera feed
+        self.capture = cv2.VideoCapture(0)
+        Clock.schedule_interval(self.update, 1.0 / 30.0)
 
         return self.layout
 
     def update(self, dt):
-        # Capture frame from the camera
-        ret, frame = self.cap.read()
-
+        ret, frame = self.capture.read()
         if ret:
-            # Decode barcodes in the current frame
+            # Decode barcodes
             barcodes = decode(frame)
             for barcode in barcodes:
                 barcode_data = barcode.data.decode('utf-8')
-                barcode_type = barcode.type
 
+                # Check against the valid barcodes list
                 if barcode_data in valid_barcodes_list:
-                    print(f"Barcode {barcode_data} found in the valid list")
-                    self.play_sound("linuxmint-login.wav")
-                    self.move_to_list(barcode_data)
-
-                    # Update the barcode label
-                    self.barcode_label.text = f"Barcodes Found:\n" + "\n".join(moved_barcodes_list)
+                    if barcode_data not in found_barcodes_list:
+                        found_barcodes_list.append(barcode_data)
+                        self.play_sound("sound_1.wav")
+                        self.label.text = f"Barcode {barcode_data} added to found list!"
+                    else:
+                        self.label.text = f"Barcode {barcode_data} already found."
                 else:
-                    print(f"Barcode {barcode_data} not found in any list")
-                    self.play_sound("linuxmint-gdm.wav")
+                    self.play_sound("sound_invalid.wav")
+                    self.label.text = f"Barcode {barcode_data} not found in valid list."
 
-                # Draw a rectangle around the barcode
-                points = barcode.polygon
-                if len(points) == 4:
-                    pts = [tuple(point) for point in points]
-                    cv2.polylines(frame, [np.array(pts, dtype=np.int32)], isClosed=True, color=(0, 255, 0), thickness=3)
-                else:
-                    cv2.rectangle(frame, (barcode.rect.left, barcode.rect.top),
-                                  (barcode.rect.left + barcode.rect.width, barcode.rect.top + barcode.rect.height),
-                                  (0, 255, 0), 2)
-
-                # Display the barcode data on the frame
-                text = f'{barcode_type}: {barcode_data}'
-                cv2.putText(frame, text, (barcode.rect.left, barcode.rect.top - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-
-            # Convert the image to Kivy texture and display it
-            buf = cv2.flip(frame, 0).tostring()
+            # Convert frame to Kivy texture
+            buffer = cv2.flip(frame, 0).tostring()
             texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
-            texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
-            self.img.texture = texture
+            texture.blit_buffer(buffer, colorfmt='bgr', bufferfmt='ubyte')
+            self.image.texture = texture
 
     def play_sound(self, sound_file):
-        """Play a sound when a barcode is detected."""
         try:
             pygame.mixer.init()
             pygame.mixer.music.load(sound_file)
             pygame.mixer.music.play()
-            print(f"Playing sound: {sound_file}")
         except Exception as e:
             print(f"Error playing sound: {e}")
 
-    def move_to_list(self, barcode_data):
-        """Move the item (barcode) to the moved list."""
-        valid_barcodes_list.remove(barcode_data)
-        moved_barcodes_list.append(barcode_data)
-        print(f"Moved {barcode_data} to the moved list")
+    def clear_found_barcodes(self, instance):
+        found_barcodes_list.clear()
+        self.label.text = "Found barcodes list cleared."
 
-    def on_stop(self):
-        """Release the camera when the app is closed."""
-        self.cap.release()
-
-# Run the Kivy app
+# Run the app
 if __name__ == '__main__':
     CameraApp().run()
