@@ -10,6 +10,7 @@ from kivy.uix.popup import Popup
 from kivy.clock import Clock
 from kivy.graphics.texture import Texture
 from pyzbar.pyzbar import decode
+from kivy.core.audio import SoundLoader  # For playing sounds
 
 # File to save/load the location data
 LOCATION_FILE = "locations.json"
@@ -54,6 +55,10 @@ class CameraApp(App):
         # Track the current mode (True for adding barcodes, False for finding barcodes)
         self.adding_to_location = False
 
+        # Load sound files
+        self.success_sound = SoundLoader.load('linuxmint-login.wav')
+        self.error_sound = SoundLoader.load('linuxmint-gdm.wav')
+
         return self.layout
 
     def update(self, dt):
@@ -65,14 +70,18 @@ class CameraApp(App):
                 barcode_data = barcode.data.decode('utf-8')
                 self.text_input.text = barcode_data  # Display scanned barcode in text input
 
-                if self.adding_to_location and self.current_location:
-                    self.add_barcode_to_location(barcode_data)
+                # Add delay of 0.5 seconds to prevent duplicate scans
+                Clock.schedule_once(lambda dt: self.process_barcode(barcode_data), 0.5)
 
             # Convert frame to Kivy texture
             buffer = cv2.flip(frame, 0).tostring()
             texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
             texture.blit_buffer(buffer, colorfmt='bgr', bufferfmt='ubyte')
             self.image.texture = texture
+
+    def process_barcode(self, barcode_data):
+        if self.adding_to_location and self.current_location:
+            self.add_barcode_to_location(barcode_data)
 
     def set_location(self, instance):
         location = self.text_input.text
@@ -113,12 +122,15 @@ class CameraApp(App):
         if self.current_location in location_dict:
             if barcode in location_dict[self.current_location]:
                 self.label.text = f"Barcode {barcode} already in {self.current_location}."
+                self.error_sound.play()  # Play error sound
             else:
                 location_dict[self.current_location].append(barcode)
                 self.label.text = f"Barcode {barcode} added to {self.current_location}."
+                self.success_sound.play()  # Play success sound
         else:
             location_dict[self.current_location] = [barcode]
             self.label.text = f"Barcode {barcode} added to new location {self.current_location}."
+            self.success_sound.play()  # Play success sound
 
         self.text_input.text = ""  # Clear the input after adding
         self.save_location_data()
@@ -145,8 +157,10 @@ class CameraApp(App):
 
         if found_in_location:
             self.label.text = f"Barcode {barcode} is in {found_in_location}."
+            self.success_sound.play()
         else:
             self.label.text = f"Barcode {barcode} not found."
+            self.error_sound.play()
 
     def save_location_data(self):
         """Saves the location_dict to a JSON file."""
