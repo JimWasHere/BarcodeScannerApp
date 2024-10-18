@@ -1,4 +1,5 @@
 import cv2
+import json
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
@@ -10,11 +11,17 @@ from kivy.clock import Clock
 from kivy.graphics.texture import Texture
 from pyzbar.pyzbar import decode
 
+# File to save/load the location data
+LOCATION_FILE = "locations.json"
+
 # Dictionary to hold locations and corresponding barcodes
 location_dict = {}
 
 class CameraApp(App):
     def build(self):
+        # Load saved location data (if available)
+        self.load_location_data()
+
         # Layout setup
         self.layout = BoxLayout(orientation='vertical')
 
@@ -114,9 +121,10 @@ class CameraApp(App):
             self.label.text = f"Barcode {barcode} added to new location {self.current_location}."
 
         self.text_input.text = ""  # Clear the input after adding
+        self.save_location_data()
 
     def find_barcode(self, instance):
-        barcode = self.text_input.text
+        barcode = self.text_input.text.strip()  # Strip any extra spaces or newline characters
         self.text_input.text = ""  # Clear the input field after searching
         self.adding_to_location = False  # Switch to search mode
 
@@ -124,9 +132,13 @@ class CameraApp(App):
             self.label.text = "Please enter or scan a barcode."
             return
 
+        # Ensure the barcode and stored barcodes are strings (in case of type issues)
+        barcode = str(barcode)
+
         # Check if barcode exists in any location
         found_in_location = None
         for location, barcodes in location_dict.items():
+            barcodes = [str(b) for b in barcodes]  # Convert all barcodes to strings
             if barcode in barcodes:
                 found_in_location = location
                 break
@@ -135,6 +147,29 @@ class CameraApp(App):
             self.label.text = f"Barcode {barcode} is in {found_in_location}."
         else:
             self.label.text = f"Barcode {barcode} not found."
+
+    def save_location_data(self):
+        """Saves the location_dict to a JSON file."""
+        try:
+            with open(LOCATION_FILE, 'w') as f:
+                json.dump(location_dict, f)
+        except Exception as e:
+            self.label.text = f"Error saving data: {e}"
+
+    def load_location_data(self):
+        """Loads the location_dict from a JSON file."""
+        try:
+            with open(LOCATION_FILE, 'r') as f:
+                global location_dict
+                location_dict = json.load(f)
+                # Convert all barcodes to strings after loading
+                for location, barcodes in location_dict.items():
+                    location_dict[location] = [str(b) for b in barcodes]
+        except FileNotFoundError:
+            # File not found, no data to load
+            pass
+        except Exception as e:
+            self.label.text = f"Error loading data: {e}"
 
 # Run the app
 if __name__ == '__main__':
