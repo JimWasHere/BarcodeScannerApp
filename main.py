@@ -110,30 +110,87 @@ class CameraApp(App):
             self.popup.dismiss()
 
     def close_popup(self):
+        """Closes the popup and ensures the app stays responsive."""
         if hasattr(self, 'popup'):
             self.popup.dismiss()
+        self.text_input.focus = True  # Refocus on the text input to resume interaction
 
     def add_barcode_to_location(self, barcode):
         if not self.current_location:
             self.label.text = "No location set. Please set a location first."
             return
 
-        # Check if the barcode is already in the current location
-        if self.current_location in location_dict:
-            if barcode in location_dict[self.current_location]:
-                self.label.text = f"Barcode {barcode} already in {self.current_location}."
-                self.error_sound.play()  # Play error sound
-            else:
-                location_dict[self.current_location].append(barcode)
-                self.label.text = f"Barcode {barcode} added to {self.current_location}."
-                self.success_sound.play()  # Play success sound
-        else:
-            location_dict[self.current_location] = [barcode]
-            self.label.text = f"Barcode {barcode} added to new location {self.current_location}."
-            self.success_sound.play()  # Play success sound
+        # Check if the barcode exists in any other location
+        found_in_other_location = None
+        for location, barcodes in location_dict.items():
+            if barcode in barcodes and location != self.current_location:
+                found_in_other_location = location
+                break
 
-        self.text_input.text = ""  # Clear the input after adding
+        if found_in_other_location:
+            # Barcode found in another location, prompt to move
+            self.show_move_popup(barcode, found_in_other_location)
+        else:
+            # If the barcode is already in the current location
+            if self.current_location in location_dict:
+                if barcode in location_dict[self.current_location]:
+                    self.label.text = f"Barcode {barcode} already in {self.current_location}."
+                    self.error_sound.play()  # Play error sound
+                else:
+                    location_dict[self.current_location].append(barcode)
+                    self.label.text = f"Barcode {barcode} added to {self.current_location}."
+                    self.success_sound.play()  # Play success sound
+            else:
+                location_dict[self.current_location] = [barcode]
+                self.label.text = f"Barcode {barcode} added to new location {self.current_location}."
+                self.success_sound.play()  # Play success sound
+
+            self.text_input.text = ""  # Clear the input after adding
+            self.save_location_data()
+
+    def show_move_popup(self, barcode, found_in_location):
+        """Shows a popup asking the user if they want to move the barcode."""
+        popup_content = BoxLayout(orientation='vertical')
+        popup_content.add_widget(
+            Label(text=f"Barcode {barcode} is in {found_in_location}. Move to {self.current_location}?"))
+
+        # Buttons for confirmation (Yes/No)
+        yes_button = Button(text="Yes", size_hint=(1, 0.2))
+        yes_button.bind(on_press=lambda x: self.move_barcode(barcode, found_in_location))
+        yes_button.bind(on_press=lambda x: self.close_popup())  # Close the popup after moving
+        popup_content.add_widget(yes_button)
+
+        no_button = Button(text="No", size_hint=(1, 0.2))
+        no_button.bind(on_press=lambda x: self.close_popup())  # Close the popup without moving
+        popup_content.add_widget(no_button)
+
+        self.popup = Popup(title='Move Barcode?', content=popup_content, size_hint=(0.75, 0.4))
+        self.popup.open()
+
+    def move_barcode(self, barcode, found_in_location):
+        """Moves the barcode from its previous location to the current one."""
+        # Remove the barcode from the previous location
+        if barcode in location_dict[found_in_location]:
+            location_dict[found_in_location].remove(barcode)
+            if not location_dict[found_in_location]:  # Remove the location if no barcodes are left
+                del location_dict[found_in_location]
+
+        # Check if the barcode already exists in the new location to avoid adding it twice
+        if self.current_location not in location_dict:
+            location_dict[self.current_location] = []
+
+        if barcode not in location_dict[self.current_location]:
+            location_dict[self.current_location].append(barcode)
+
+        self.label.text = f"Barcode {barcode} moved to {self.current_location}."
+        self.success_sound.play()
+
+        self.text_input.text = ""  # Clear the input
         self.save_location_data()
+
+        # Ensure the popup is dismissed after the barcode is moved
+        if hasattr(self, 'popup'):
+            self.popup.dismiss()
 
     def find_barcode(self, instance):
         barcode = self.text_input.text.strip()  # Strip any extra spaces or newline characters
@@ -171,20 +228,15 @@ class CameraApp(App):
             self.label.text = f"Error saving data: {e}"
 
     def load_location_data(self):
-        """Loads the location_dict from a JSON file."""
+        """Loads location data from a JSON file."""
+        global location_dict
         try:
             with open(LOCATION_FILE, 'r') as f:
-                global location_dict
                 location_dict = json.load(f)
-                # Convert all barcodes to strings after loading
-                for location, barcodes in location_dict.items():
-                    location_dict[location] = [str(b) for b in barcodes]
         except FileNotFoundError:
-            # File not found, no data to load
-            pass
+            location_dict = {}
         except Exception as e:
             self.label.text = f"Error loading data: {e}"
 
-# Run the app
 if __name__ == '__main__':
     CameraApp().run()
