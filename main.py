@@ -23,7 +23,6 @@ class CameraApp(App):
         super().__init__(**kwargs)
         self.layout = BoxLayout(orientation='vertical')
         self.image_display = Image(size_hint=(1, 1))
-        self.capture = cv2.VideoCapture(0)
         self.data = self.load_json()
         self.select_location_button = Button(text="Select Location/Shelf", size_hint=(0.3, 0.1))
         self.current_shelf_path = []
@@ -132,7 +131,7 @@ class CameraApp(App):
         self.popup = Popup(title="Select Location", content=popup_layout, size_hint=(0.8, 0.8))
         self.popup.open()
 
-    def create_location(self):
+    def create_location(self, instance):
         layout = BoxLayout(orientation='vertical')
         label = Label(text="Enter new location name:")
         layout.add_widget(label)
@@ -149,16 +148,31 @@ class CameraApp(App):
         self.create_location_popup = Popup(title="New Location", content=layout, size_hint=(0.8, 0.8))
         self.create_location_popup.open()
 
-    def confirm_location_creation(self):
-        location_name = self.new_location_input.text.strip()
-        if location_name and location_name not in self.data['locations']:
-            self.data['locations'][location_name] = {"shelves": {}}
+    def confirm_nested_shelf_creation(self, location_name, parent_shelf):
+        nested_shelf_name = self.new_nested_shelf_input.text.strip()
+        if nested_shelf_name and nested_shelf_name not in self.data['locations'][location_name]['shelves'][
+            parent_shelf]:
+            # Add the new nested shelf to the JSON structure
+            self.data['locations'][location_name]['shelves'][parent_shelf][nested_shelf_name] = {}
+
+            # Save the updated data to the JSON file
             self.save_json()
 
-            self.create_location_popup.dismiss()
-            self.open_shelf_popup(location_name)
+            # Close the popup
+            self.create_nested_shelf_popup.dismiss()
+
+            # Update the current shelf path to the newly created nested shelf
+            self.current_shelf_path = [location_name, parent_shelf, nested_shelf_name]
+            print(f"Scanning now in new nested shelf: {' -> '.join(self.current_shelf_path)}")
+
+            # Open the nested shelf popup to reflect the newly created shelf
+            self.open_nested_shelf_popup(location_name, parent_shelf)
+
+            # Start scanning immediately in the newly selected nested shelf
+            self.close_popup()
+
         else:
-            print("Invalid or duplicate location name.")
+            print("Invalid or duplicate nested shelf name.")
 
     def open_shelf_popup(self, location_name):
         popup_layout = GridLayout(cols=2, padding=10, spacing=10)
@@ -260,7 +274,7 @@ class CameraApp(App):
         else:
                 print("Invalid or duplicate nested shelf name.")
 
-    def close_popup(self):
+    def close_popup(self, instance=None):
             # Dismiss any open popup
         if hasattr(self, 'popup') and self.popup:
                 self.popup.dismiss()
